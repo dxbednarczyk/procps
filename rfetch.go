@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/akyoto/cache"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 var routes = []string{"/", "/ping", "/meminfo", "/loadinfo", "/uptime", "/cpuinfo"}
@@ -20,45 +19,40 @@ type InfoType interface {
 }
 
 func main() {
-	port := flag.Int("p", 8080, "port to bind to")
-
 	c := cache.New(5 * time.Second)
-	r := chi.NewRouter()
+	e := echo.New()
 
-	r.Use(middleware.Logger)
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	e.GET("/", func(c echo.Context) error {
 		m, err := json.Marshal(routes)
 		if err != nil {
-			w.WriteHeader(500)
-			w.Write([]byte("Could not marshal data"))
-			return
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(m)
+		return c.JSON(http.StatusOK, m)
 	})
 
-	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("{\"response\": \"pong\"}"))
+	e.GET("/ping", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, []byte(`{"response": "pong"}`))
 	})
 
-	r.Get("/meminfo", cachedJsonRoute("meminfo", GetMemInfo, c, 1*time.Second))
-	r.Get("/loadinfo", cachedJsonRoute("loadinfo", GetLoadInfo, c, 1*time.Minute))
-	r.Get("/uptime", cachedJsonRoute("uptime", GetUptime, c, 1*time.Second))
+	e.GET("/meminfo", cachedJsonRoute("meminfo", GetMemInfo, c, 1*time.Second))
+	e.GET("/loadinfo", cachedJsonRoute("loadinfo", GetLoadInfo, c, 1*time.Minute))
+	e.GET("/uptime", cachedJsonRoute("uptime", GetUptime, c, 1*time.Second))
 
-	// I doubt this program will still be running while you change the CPU!
-	r.Get("/cpuinfo", cachedJsonRoute("cpuinfo", GetCPUInfo, c, time.Duration(1<<63-1)))
+	// I doubt this program will still be running after 200+ years!
+	e.GET("/cpuinfo", cachedJsonRoute("cpuinfo", GetCPUInfo, c, time.Duration(1<<63-1)))
 
+	port := flag.Int("p", 8080, "port to bind to")
 	flag.Parse()
 
-	log.Printf("Listening on :%d\n", *port)
-	http.ListenAndServe(fmt.Sprintf(":%d", *port), r)
+	e.Logger.Fatal(e.Start(fmt.Sprintf(":%d", *port)))
 }
 
-func cachedJsonRoute[T InfoType](name string, tocall func() T, cache *cache.Cache, duration time.Duration) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func cachedJsonRoute[T InfoType](name string, tocall func() T, cache *cache.Cache, duration time.Duration) func(c echo.Context) error {
+	return func(c echo.Context) error {
 		var tw []byte
 
 		cached, found := cache.Get(name)
@@ -67,9 +61,7 @@ func cachedJsonRoute[T InfoType](name string, tocall func() T, cache *cache.Cach
 			m, err := json.Marshal(tocall())
 
 			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("Could not marshal data"))
-				return
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
 
 			tw = m
@@ -78,7 +70,6 @@ func cachedJsonRoute[T InfoType](name string, tocall func() T, cache *cache.Cach
 			tw = cached.([]byte)
 		}
 
-		w.Header().Add("Content-Type", "application/json")
-		w.Write(tw)
+		return c.JSON(http.StatusOK, tw)
 	}
 }
