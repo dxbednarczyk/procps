@@ -82,6 +82,9 @@ pub fn get_uptime() -> Uptime {
     let mut idle = 0.;
 
     unsafe {
+        // sometimes on first call it returns the wrong values
+        // ugly but working solution
+        uptime(&mut active, &mut idle);
         uptime(&mut active, &mut idle);
     }
 
