@@ -20,4 +20,4 @@ Fully tested by parsing output from the [procps-ng](https://gitlab.com/procps-ng
   - [ ] cpuinfo
 - [x] version.h
 
-Header file support is incremental, once one is done development on the next begins.
+Header file support is incremental, once one is done, development on the next begins.
