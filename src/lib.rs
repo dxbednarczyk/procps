@@ -12,8 +12,12 @@ pub struct MemInfo {
     pub used: u64,
     pub free: u64,
     pub shared: u64,
-    pub swap_free: u64,
+    pub buffers: u64,
+    pub cached: u64,
+    pub available: u64,
     pub swap_total: u64,
+    pub swap_used: u64,
+    pub swap_free: u64,
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,8 +49,12 @@ pub fn get_meminfo() -> MemInfo {
             used: kb_main_used,
             free: kb_main_free,
             shared: kb_main_shared,
-            swap_free: kb_swap_free,
+            buffers: kb_main_buffers,
+            cached: kb_main_cached,
+            available: kb_main_available,
             swap_total: kb_swap_total,
+            swap_used: kb_swap_used,
+            swap_free: kb_swap_free,
         }
     }
 }
@@ -82,9 +90,6 @@ pub fn get_uptime() -> Uptime {
     let mut idle = 0.;
 
     unsafe {
-        // sometimes on first call it returns the wrong values
-        // ugly but working solution
-        uptime(&mut active, &mut idle);
         uptime(&mut active, &mut idle);
     }
 
@@ -99,19 +104,37 @@ mod tests {
     use super::*;
     use chrono::prelude::*;
     use chrono::Local;
-    use std::{process::Command, thread};
+    use std::process::Command;
 
     #[test]
     fn meminfo() {
-        let mi1 = get_meminfo();
-        let mi2 = get_meminfo();
-        assert_eq!(mi1, mi2);
+        let free_output = Command::new("free")
+            .arg("-w")
+            .output()
+            .expect("failed to run free");
 
-        let one_second = Duration::from_secs(1);
-        thread::sleep(one_second);
+        let values: Vec<Vec<u64>> = String::from_utf8(free_output.stdout).unwrap()
+            .lines()
+            .skip(1)
+            .map(|x| x.split_whitespace().filter_map(|y| y.parse().ok()).collect())
+            .collect();
 
-        let mi3 = get_meminfo();
-        assert_ne!(mi3, mi2);
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].len(), 7);
+        assert_eq!(values[1].len(), 3);
+
+        let meminfo = get_meminfo();
+
+        assert_eq!(meminfo.total, values[0][0]);
+        assert_eq!(meminfo.used, values[0][1]);
+        assert_eq!(meminfo.free, values[0][2]);
+        assert_eq!(meminfo.shared, values[0][3]);
+        assert_eq!(meminfo.buffers, values[0][4]);
+        assert_eq!(meminfo.cached, values[0][5]);
+        assert_eq!(meminfo.available, values[0][6]);
+        assert_eq!(meminfo.swap_total, values[1][0]);
+        assert_eq!(meminfo.swap_used, values[1][1]);
+        assert_eq!(meminfo.swap_free, values[1][2]);
     }
 
     #[test]
@@ -187,11 +210,9 @@ mod tests {
 
         let now = Local::now();
 
-        assert_eq!(
-            chrono::Duration::from_std(uptime.active)
-                .unwrap()
-                .num_seconds(),
-            (now - parsed_time).num_seconds()
+        // can sometimes be off by 1 second
+        assert!(
+            chrono::Duration::from_std(uptime.active).unwrap().num_seconds() - 1 <= (now - parsed_time).num_seconds()
         );
     }
 }

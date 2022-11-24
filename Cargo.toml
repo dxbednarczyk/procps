@@ -1,7 +1,9 @@
 [package]
-name = "rfetch"
+name = "procps"
 version = "0.1.0"
+authors = ["Damian Bednarczyk <dxbednarczyk@gmail.com>"]
 edition = "2021"
+description = "Bindings for libprocps v3.3 with structured output"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
