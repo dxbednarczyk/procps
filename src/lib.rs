@@ -4,7 +4,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::time::Duration;
+use std::{ffi::CStr, mem, time::Duration};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MemInfo {
@@ -38,6 +38,33 @@ pub struct KernelVersion {
 pub struct Uptime {
     pub active: Duration,
     pub idle: Duration,
+}
+
+#[derive(Debug)]
+pub struct Disk {
+    pub reads_sectors: u64,
+    pub written_sectors: u64,
+    pub disk_name: String,
+    pub in_progress_io: u32,
+    pub merged_reads: u32,
+    pub merged_writes: u32,
+    pub milli_reading: u32,
+    pub milli_spent_io: u32,
+    pub milli_writing: u32,
+    pub partitions: u32,
+    pub reads: u32,
+    pub weighted_milli_spent_io: u32,
+    pub writes: u32,
+}
+
+#[derive(Debug)]
+pub struct Partition {
+    pub partition_name: String,
+    pub reads_sectors: u64,
+    pub parent_disk_index: u32,
+    pub reads: u32,
+    pub writes: u32,
+    pub requested_writes: u64,
 }
 
 pub fn get_meminfo() -> MemInfo {
@@ -99,11 +126,69 @@ pub fn get_uptime() -> Uptime {
     }
 }
 
+pub fn get_btime() -> u64 {
+    unsafe { getbtime() }
+}
+
+pub fn get_diskstat() -> (Vec<Disk>, Vec<Partition>) {
+    let diskstat;
+    let partitionstat;
+
+    unsafe {
+        let mut disks = mem::zeroed();
+        let mut partitions = mem::zeroed();
+
+        let diskstat_len = getdiskstat(&mut disks, &mut partitions) as usize;
+
+        diskstat = Vec::from_raw_parts(disks, diskstat_len, diskstat_len)
+            .iter()
+            .map(|&ds| Disk {
+                reads_sectors: ds.reads_sectors,
+                disk_name: CStr::from_ptr(ds.disk_name.as_ptr())
+                    .to_owned()
+                    .into_string()
+                    .unwrap(),
+                written_sectors: ds.written_sectors,
+                in_progress_io: ds.inprogress_IO,
+                merged_reads: ds.merged_reads,
+                merged_writes: ds.merged_writes,
+                milli_reading: ds.milli_reading,
+                milli_spent_io: ds.milli_spent_IO,
+                milli_writing: ds.milli_writing,
+                partitions: ds.partitions,
+                reads: ds.reads,
+                weighted_milli_spent_io: ds.weighted_milli_spent_IO,
+                writes: ds.writes,
+            })
+            .collect();
+
+        let partitionstat_len = getpartitions_num(disks, diskstat_len as i32) as usize;
+
+        partitionstat = Vec::from_raw_parts(partitions, partitionstat_len, partitionstat_len)
+            .iter()
+            .map(|&ps| Partition {
+                partition_name: CStr::from_ptr(ps.partition_name.as_ptr())
+                    .to_owned()
+                    .into_string()
+                    .unwrap(),
+                reads_sectors: ps.reads_sectors,
+                parent_disk_index: ps.parent_disk,
+                reads: ps.reads,
+                writes: ps.writes,
+                requested_writes: ps.requested_writes,
+            })
+            .collect()
+    }
+
+    (diskstat, partitionstat)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::prelude::*;
     use chrono::Local;
+    use datetime::Instant;
     use std::process::Command;
 
     #[test]
@@ -113,10 +198,15 @@ mod tests {
             .output()
             .expect("failed to run free");
 
-        let values: Vec<Vec<u64>> = String::from_utf8(free_output.stdout).unwrap()
+        let values: Vec<Vec<u64>> = String::from_utf8(free_output.stdout)
+            .unwrap()
             .lines()
             .skip(1)
-            .map(|x| x.split_whitespace().filter_map(|y| y.parse().ok()).collect())
+            .map(|x| {
+                x.split_whitespace()
+                    .filter_map(|y| y.parse().ok())
+                    .collect()
+            })
             .collect();
 
         assert_eq!(values.len(), 2);
@@ -144,7 +234,7 @@ mod tests {
             .expect("failed to run uptime");
 
         let stdout = String::from_utf8(uptime_output.stdout).unwrap();
-        
+
         let mut avgs: Vec<f64> = stdout
             .split_whitespace()
             .filter_map(|x| x.replace([',', '\n'], "").parse().ok())
@@ -212,7 +302,21 @@ mod tests {
 
         // can sometimes be off by 1 second
         assert!(
-            chrono::Duration::from_std(uptime.active).unwrap().num_seconds() - 1 <= (now - parsed_time).num_seconds()
+            chrono::Duration::from_std(uptime.active)
+                .unwrap()
+                .num_seconds()
+                - 1
+                <= (now - parsed_time).num_seconds()
         );
+    }
+
+    #[test]
+    fn btime() {
+        let btime = get_btime();
+        let now = Instant::now();
+        let uptime = get_uptime().active;
+
+        // boot time will be earlier than uptime by 1 second
+        assert_eq!(now.seconds() as u64 - btime - 1, uptime.as_secs());
     }
 }

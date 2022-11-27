@@ -7,17 +7,15 @@ Fully tested by parsing output from the [procps-ng](https://gitlab.com/procps-ng
 ## Current Implementation
 - [ ] sysinfo.h
   - [x] uptime
-  - [ ] btime
+  - [x] btime
   - [x] loadavg 
   - [ ] meminfo
     - [x] the important stuff
     - [ ] others
+  - [ ] vminfo
   - [ ] getstat
-  - [ ] partitions
-  - [ ] diskstat
+  - [x] diskstat
   - [ ] slabinfo
   - [ ] pid_digits
   - [ ] cpuinfo
 - [x] version.h
-
-Header file support is incremental, once one is done, development on the next begins.

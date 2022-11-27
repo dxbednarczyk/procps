@@ -9,6 +9,7 @@ description = "Bindings for libprocps v3.3 with structured output"
 
 [dev-dependencies]
 chrono = "0.4.23"
+datetime = "0.5.2"
 
 [build-dependencies]
 bindgen = "0.63.0"
