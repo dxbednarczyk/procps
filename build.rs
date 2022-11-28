@@ -13,6 +13,7 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
+        .derive_debug(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("unable to generate bindings");
