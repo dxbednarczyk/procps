@@ -4,16 +4,15 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::{
-    ffi::CStr,
-    mem,
-    time::Duration,
-};
+use std::{ffi::CStr, mem, time::Duration};
 
 pub trait Name {
     fn name_as_string(&self) -> String;
     fn name_as_str(&self) -> &str;
 }
+
+type Disk = disk_stat;
+type Partition = partition_stat;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MemInfo {
@@ -49,8 +48,11 @@ pub struct Uptime {
     pub idle: Duration,
 }
 
-pub type Disk = disk_stat;
-pub type Partition = partition_stat;
+#[derive(Debug)]
+pub struct DiskStat {
+    pub disks: Vec<Disk>,
+    pub partitions: Vec<Partition>,
+}
 
 impl Name for Disk {
     fn name_as_string(&self) -> String {
@@ -149,7 +151,7 @@ pub fn get_btime() -> u64 {
     unsafe { getbtime() }
 }
 
-pub fn get_diskstat() -> (Vec<Disk>, Vec<Partition>) {
+pub fn get_diskstat() -> DiskStat {
     let diskstat;
     let partitionstat;
 
@@ -164,7 +166,10 @@ pub fn get_diskstat() -> (Vec<Disk>, Vec<Partition>) {
         partitionstat = Vec::from_raw_parts(partitions, partitionstat_len, partitionstat_len);
     }
 
-    (diskstat, partitionstat)
+    DiskStat { 
+        disks: diskstat,
+        partitions: partitionstat,
+    }
 }
 
 #[cfg(test)]

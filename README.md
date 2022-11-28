@@ -2,7 +2,7 @@
 
 Bindings for `libprocps` v3.3 with structured output.
 
-Fully tested by parsing output from the [procps-ng](https://gitlab.com/procps-ng/procps/-/tree/v3.3.17) command-line utilities.
+Tested by parsing output from the [procps-ng](https://gitlab.com/procps-ng/procps/-/tree/v3.3.17) command-line utilities.
 
 ## Current Implementation
 - [ ] sysinfo.h
