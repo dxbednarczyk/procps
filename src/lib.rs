@@ -4,7 +4,12 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::{ffi::CStr, mem, time::Duration};
+use num::{Integer, Zero};
+use std::{
+    ffi::CStr,
+    mem::{self, MaybeUninit},
+    time::Duration,
+};
 
 pub trait Name {
     fn name_as_string(&self) -> String;
@@ -52,6 +57,43 @@ pub struct Uptime {
 pub struct DiskStat {
     pub disks: Vec<Disk>,
     pub partitions: Vec<Partition>,
+}
+
+#[derive(Debug)]
+pub struct Cpu {
+    pub user_processes: Option<u64>,
+    pub nice_processes: Option<u64>,
+    pub system_processes: Option<u64>,
+    pub idle: Option<u64>,
+    pub iowait: Option<u64>,
+    pub irq: Option<u64>,
+    pub soft_irq: Option<u64>,
+    pub steal: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct Page {
+    pub pin: Option<u64>,
+    pub pout: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct Swap {
+    pub sin: Option<u64>,
+    pub sout: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct Stat {
+    pub cpu: Cpu,
+    pub page: Page,
+    pub swap: Swap,
+    pub interrupts: Option<u32>,
+    pub context_switches: Option<u32>,
+    pub btime: Option<u32>,
+    pub processes: Option<u32>,
+    pub running_processes: Option<u32>,
+    pub blocked_processes: Option<u32>,
 }
 
 impl Name for Disk {
@@ -166,9 +208,117 @@ pub fn get_diskstat() -> DiskStat {
         partitionstat = Vec::from_raw_parts(partitions, partitionstat_len, partitionstat_len);
     }
 
-    DiskStat { 
+    DiskStat {
         disks: diskstat,
         partitions: partitionstat,
+    }
+}
+
+// THIS IS DISGUSTING USE THIS ONLY IF YOU FULLY UNDERSTAND THE 
+// PAIN AND SUFFERING THAT THIS IMPLEMENTATION BRINGS TO MY EYES
+pub fn get_stat() -> Stat {
+    unsafe {
+        // cpu
+        let mut user_processes = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        let mut nice_processes = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        let mut system_processes = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        let mut idle = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        // not separated out until the 2.5.41 kernel
+        let mut iowait = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init(); 
+        // not separated out until the 2.6.0-test4 kernel
+        let mut irq = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init(); 
+        // not separated out until the 2.6.0-test4 kernel
+        let mut soft_irq = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        // not separated out until the 2.6.11 kernel
+        let mut steal = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+
+        // page
+        let mut pin = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        let mut pout = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+
+        // swap
+        let mut sin = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+        let mut sout = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
+
+        // other
+        let mut interrupts = MaybeUninit::<[MaybeUninit<u32>; 2]>::uninit().assume_init();
+        let mut context_switches = MaybeUninit::<[MaybeUninit<u32>; 2]>::uninit().assume_init();
+        let mut running_processes = MaybeUninit::<u32>::uninit();
+        let mut blocked_processes = MaybeUninit::<u32>::uninit();
+        let mut btime = MaybeUninit::<u32>::uninit();
+        let mut processes = MaybeUninit::<u32>::uninit();
+
+        getstat(
+            user_processes.as_mut_ptr() as *mut u64,
+            nice_processes.as_mut_ptr() as *mut u64,
+            system_processes.as_mut_ptr() as *mut u64,
+            idle.as_mut_ptr() as *mut u64,
+            iowait.as_mut_ptr() as *mut u64,
+            irq.as_mut_ptr() as *mut u64,
+            soft_irq.as_mut_ptr() as *mut u64,
+            steal.as_mut_ptr() as *mut u64,
+            pin.as_mut_ptr() as *mut u64,
+            pout.as_mut_ptr() as *mut u64,
+            sin.as_mut_ptr() as *mut u64,
+            sout.as_mut_ptr() as *mut u64,
+            interrupts.as_mut_ptr() as *mut u32,
+            context_switches.as_mut_ptr() as *mut u32,
+            running_processes.as_mut_ptr() as *mut u32,
+            blocked_processes.as_mut_ptr() as *mut u32,
+            btime.as_mut_ptr() as *mut u32,
+            processes.as_mut_ptr() as *mut u32,
+        );
+
+        unsafe fn maybe_to_option_from_arr<T: Integer + Copy>(
+            val: [MaybeUninit<T>; 2],
+        ) -> Option<T> {
+            let filtered = val
+                .iter()
+                .filter(|mu| !mu.as_ptr().is_null() && !mu.assume_init().is_zero())
+                .map(|mu| mu.assume_init())
+                .collect::<Vec<T>>();
+
+            if filtered.is_empty() {
+                return None;
+            }
+
+            Some(filtered[0])
+        }
+
+        unsafe fn maybe_to_option(val: MaybeUninit<u32>) -> Option<u32> {
+            if val.as_ptr().is_null() && !val.assume_init().is_zero() {
+                return None;
+            }
+
+            Some(val.assume_init())
+        }
+
+        Stat {
+            cpu: Cpu {
+                user_processes: maybe_to_option_from_arr(user_processes),
+                nice_processes: maybe_to_option_from_arr(nice_processes),
+                system_processes: maybe_to_option_from_arr(system_processes),
+                idle: maybe_to_option_from_arr(idle),
+                iowait: maybe_to_option_from_arr(iowait),
+                irq: maybe_to_option_from_arr(irq),
+                soft_irq: maybe_to_option_from_arr(soft_irq),
+                steal: maybe_to_option_from_arr(steal),
+            },
+            page: Page {
+                pin: maybe_to_option_from_arr(pin),
+                pout: maybe_to_option_from_arr(pout),
+            },
+            swap: Swap {
+                sin: maybe_to_option_from_arr(sin),
+                sout: maybe_to_option_from_arr(sout),
+            },
+            interrupts: maybe_to_option_from_arr(interrupts),
+            context_switches: maybe_to_option_from_arr(context_switches),
+            btime: maybe_to_option(btime),
+            processes: maybe_to_option(processes),
+            running_processes: maybe_to_option(running_processes),
+            blocked_processes: maybe_to_option(blocked_processes),
+        }
     }
 }
 
@@ -307,5 +457,10 @@ mod tests {
 
         // boot time will be earlier than uptime by 1 second
         assert_eq!(now.seconds() as u64 - btime - 1, uptime.as_secs());
+    }
+
+    #[test]
+    fn stat() {
+        println!("{:?}", get_stat());
     }
 }

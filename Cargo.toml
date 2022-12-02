@@ -14,3 +14,6 @@ datetime = "0.5.2"
 [build-dependencies]
 bindgen = "0.63.0"
 pkg-config = "0.3.26"
+
+[dependencies]
+num = "0.4.0"
