@@ -13,7 +13,7 @@ Tested by parsing output from the [procps-ng](https://gitlab.com/procps-ng/procp
     - [x] the important stuff
     - [ ] others
   - [ ] vminfo
-  - [ ] getstat
+  - [x] getstat
   - [x] diskstat
   - [ ] slabinfo
   - [ ] pid_digits
