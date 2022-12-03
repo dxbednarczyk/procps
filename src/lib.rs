@@ -431,7 +431,6 @@ mod tests {
         let now = Instant::now();
         let uptime = get_uptime().active;
 
-        // boot time will be earlier than uptime by 1 second
-        assert_eq!(now.seconds() as u64 - btime - 1, uptime.as_secs());
+        assert_eq!(now.seconds() as u64 - btime, uptime.as_secs());
     }
 }
