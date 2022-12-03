@@ -434,9 +434,4 @@ mod tests {
         // boot time will be earlier than uptime by 1 second
         assert_eq!(now.seconds() as u64 - btime - 1, uptime.as_secs());
     }
-
-    #[test]
-    fn stat() {
-        println!("{:?}", get_stat());
-    }
 }
