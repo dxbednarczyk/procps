@@ -4,12 +4,11 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use num::{Integer, Zero};
 use std::{
     ffi::CStr,
-    mem::{self, MaybeUninit},
-    time::Duration,
+    time::Duration, mem, 
 };
+use libc::{c_ulonglong, c_uint, c_ulong};
 
 pub trait Name {
     fn name_as_string(&self) -> String;
@@ -61,26 +60,26 @@ pub struct DiskStat {
 
 #[derive(Debug)]
 pub struct Cpu {
-    pub user_processes: Option<u64>,
-    pub nice_processes: Option<u64>,
-    pub system_processes: Option<u64>,
-    pub idle: Option<u64>,
-    pub iowait: Option<u64>,
-    pub irq: Option<u64>,
-    pub soft_irq: Option<u64>,
-    pub steal: Option<u64>,
+    pub user_processes: c_ulonglong,
+    pub nice_processes: c_ulonglong,
+    pub system_processes: c_ulonglong,
+    pub idle: c_ulonglong,
+    pub iowait: c_ulonglong,
+    pub irq: c_ulonglong,
+    pub soft_irq: c_ulonglong,
+    pub steal: c_ulonglong,
 }
 
 #[derive(Debug)]
 pub struct Page {
-    pub pin: Option<u64>,
-    pub pout: Option<u64>,
+    pub pin: c_ulong,
+    pub pout: c_ulong,
 }
 
 #[derive(Debug)]
 pub struct Swap {
-    pub sin: Option<u64>,
-    pub sout: Option<u64>,
+    pub sin: c_ulong,
+    pub sout: c_ulong,
 }
 
 #[derive(Debug)]
@@ -88,12 +87,12 @@ pub struct Stat {
     pub cpu: Cpu,
     pub page: Page,
     pub swap: Swap,
-    pub interrupts: Option<u32>,
-    pub context_switches: Option<u32>,
-    pub btime: Option<u32>,
-    pub processes: Option<u32>,
-    pub running_processes: Option<u32>,
-    pub blocked_processes: Option<u32>,
+    pub interrupts: c_uint,
+    pub context_switches: c_uint,
+    pub running_processes: c_uint,
+    pub blocked_processes: c_uint,
+    pub btime: c_uint,
+    pub processes: c_uint,
 }
 
 impl Name for Disk {
@@ -214,110 +213,87 @@ pub fn get_diskstat() -> DiskStat {
     }
 }
 
-// THIS IS DISGUSTING USE THIS ONLY IF YOU FULLY UNDERSTAND THE 
-// PAIN AND SUFFERING THAT THIS IMPLEMENTATION BRINGS TO MY EYES
 pub fn get_stat() -> Stat {
+    // cpu
+    let user_processes: *mut c_ulonglong = [0; 2].as_mut_ptr();
+    let nice_processes: *mut c_ulonglong = [0; 2].as_mut_ptr();
+    let system_processes: *mut c_ulonglong = [0; 2].as_mut_ptr();
+    let idle: *mut c_ulonglong = [0; 2].as_mut_ptr();
+    // not separated out until the 2.5.41 kernel
+    let iowait: *mut c_ulonglong = [0; 2].as_mut_ptr(); 
+    // not separated out until the 2.6.0-test4 kernel
+    let irq: *mut c_ulonglong = [0; 2].as_mut_ptr(); 
+    // not separated out until the 2.6.0-test4 kernel
+    let soft_irq: *mut c_ulonglong = [0; 2].as_mut_ptr();
+    // not separated out until the 2.6.11 kernel
+    let steal: *mut c_ulonglong = [0; 2].as_mut_ptr();
+
+    // page
+    let pin: *mut c_ulong = [0; 2].as_mut_ptr();
+    let pout: *mut c_ulong = [0; 2].as_mut_ptr();
+
+    // swap
+    let sin: *mut c_ulong = [0; 2].as_mut_ptr();
+    let sout: *mut c_ulong = [0; 2].as_mut_ptr();
+
+    // other
+    let interrupts: *mut c_uint = [0; 2].as_mut_ptr();
+    let context_switches: *mut c_uint = [0; 2].as_mut_ptr();
+    let mut running_processes: c_uint = 0;
+    let mut blocked_processes: c_uint = 0;
+    let mut btime: c_uint = 0;
+    let mut processes: c_uint = 0;
+
     unsafe {
-        // cpu
-        let mut user_processes = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        let mut nice_processes = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        let mut system_processes = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        let mut idle = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        // not separated out until the 2.5.41 kernel
-        let mut iowait = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init(); 
-        // not separated out until the 2.6.0-test4 kernel
-        let mut irq = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init(); 
-        // not separated out until the 2.6.0-test4 kernel
-        let mut soft_irq = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        // not separated out until the 2.6.11 kernel
-        let mut steal = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-
-        // page
-        let mut pin = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        let mut pout = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-
-        // swap
-        let mut sin = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-        let mut sout = MaybeUninit::<[MaybeUninit<u64>; 2]>::uninit().assume_init();
-
-        // other
-        let mut interrupts = MaybeUninit::<[MaybeUninit<u32>; 2]>::uninit().assume_init();
-        let mut context_switches = MaybeUninit::<[MaybeUninit<u32>; 2]>::uninit().assume_init();
-        let mut running_processes = MaybeUninit::<u32>::uninit();
-        let mut blocked_processes = MaybeUninit::<u32>::uninit();
-        let mut btime = MaybeUninit::<u32>::uninit();
-        let mut processes = MaybeUninit::<u32>::uninit();
-
         getstat(
-            user_processes.as_mut_ptr() as *mut u64,
-            nice_processes.as_mut_ptr() as *mut u64,
-            system_processes.as_mut_ptr() as *mut u64,
-            idle.as_mut_ptr() as *mut u64,
-            iowait.as_mut_ptr() as *mut u64,
-            irq.as_mut_ptr() as *mut u64,
-            soft_irq.as_mut_ptr() as *mut u64,
-            steal.as_mut_ptr() as *mut u64,
-            pin.as_mut_ptr() as *mut u64,
-            pout.as_mut_ptr() as *mut u64,
-            sin.as_mut_ptr() as *mut u64,
-            sout.as_mut_ptr() as *mut u64,
-            interrupts.as_mut_ptr() as *mut u32,
-            context_switches.as_mut_ptr() as *mut u32,
-            running_processes.as_mut_ptr() as *mut u32,
-            blocked_processes.as_mut_ptr() as *mut u32,
-            btime.as_mut_ptr() as *mut u32,
-            processes.as_mut_ptr() as *mut u32,
+            user_processes,
+            nice_processes,
+            system_processes,
+            idle,
+            iowait,
+            irq,
+            soft_irq,
+            steal,
+            pin,
+            pout,
+            sin,
+            sout,
+            interrupts,
+            context_switches,
+            &mut running_processes,
+            &mut blocked_processes,
+            &mut btime,
+            &mut processes,
         );
 
-        unsafe fn maybe_to_option_from_arr<T: Integer + Copy>(
-            val: [MaybeUninit<T>; 2],
-        ) -> Option<T> {
-            let filtered = val
-                .iter()
-                .filter(|mu| !mu.as_ptr().is_null() && !mu.assume_init().is_zero())
-                .map(|mu| mu.assume_init())
-                .collect::<Vec<T>>();
-
-            if filtered.is_empty() {
-                return None;
-            }
-
-            Some(filtered[0])
-        }
-
-        unsafe fn maybe_to_option(val: MaybeUninit<u32>) -> Option<u32> {
-            if val.as_ptr().is_null() && !val.assume_init().is_zero() {
-                return None;
-            }
-
-            Some(val.assume_init())
-        }
-
+        // deref of *mut T is essentially 
+        // let something = [T; 3];
+        // something[0]
         Stat {
             cpu: Cpu {
-                user_processes: maybe_to_option_from_arr(user_processes),
-                nice_processes: maybe_to_option_from_arr(nice_processes),
-                system_processes: maybe_to_option_from_arr(system_processes),
-                idle: maybe_to_option_from_arr(idle),
-                iowait: maybe_to_option_from_arr(iowait),
-                irq: maybe_to_option_from_arr(irq),
-                soft_irq: maybe_to_option_from_arr(soft_irq),
-                steal: maybe_to_option_from_arr(steal),
+                user_processes: *user_processes,
+                nice_processes: *nice_processes,
+                system_processes: *system_processes,
+                idle: *idle,
+                iowait: *iowait,
+                irq: *irq,
+                soft_irq: *soft_irq,
+                steal: *steal,
             },
             page: Page {
-                pin: maybe_to_option_from_arr(pin),
-                pout: maybe_to_option_from_arr(pout),
+                pin: *pin,
+                pout: *pout,
             },
             swap: Swap {
-                sin: maybe_to_option_from_arr(sin),
-                sout: maybe_to_option_from_arr(sout),
+                sin: *sin,
+                sout: *sout,
             },
-            interrupts: maybe_to_option_from_arr(interrupts),
-            context_switches: maybe_to_option_from_arr(context_switches),
-            btime: maybe_to_option(btime),
-            processes: maybe_to_option(processes),
-            running_processes: maybe_to_option(running_processes),
-            blocked_processes: maybe_to_option(blocked_processes),
+            interrupts: *interrupts,
+            context_switches: *context_switches,
+            running_processes,
+            blocked_processes,
+            btime,
+            processes,
         }
     }
 }
