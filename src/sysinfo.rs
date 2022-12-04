@@ -1,4 +1,4 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+use super::*;
 
 use std::{ffi::CStr, mem, time::Duration};
 
