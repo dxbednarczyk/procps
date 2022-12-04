@@ -19,3 +19,5 @@ Tested by parsing output from the [procps-ng](https://gitlab.com/procps-ng/procp
   - [ ] pid_digits
   - [ ] cpuinfo
 - [x] version.h
+- [x] whattime.h
+- [x] wchan.h
