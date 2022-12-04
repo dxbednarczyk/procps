@@ -1,13 +1,6 @@
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
 use std::ffi::{c_int, CStr};
-
-use super::*;
-
-pub fn get_uptime_str<'a>(human_readable: bool) -> &'a str {
-    unsafe {
-        let sprinted = sprint_uptime(human_readable as c_int);
-        CStr::from_ptr(sprinted).to_str().unwrap()
-    }
-}
 
 pub fn get_uptime_string(human_readable: bool) -> String {
     unsafe {
@@ -39,9 +32,9 @@ mod tests {
 
         let pretty_uptime_stdout = String::from_utf8(pretty_uptime_output.stdout)
             .unwrap()
-            .replace('\n', ""); 
+            .replace('\n', "");
 
-        assert_eq!(get_uptime_str(true), pretty_uptime_stdout.as_str());
+        assert_eq!(get_uptime_string(true), pretty_uptime_stdout);
         assert_eq!(get_uptime_string(false), uptime_stdout);
     }
 }
