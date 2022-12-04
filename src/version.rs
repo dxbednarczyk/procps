@@ -29,7 +29,7 @@ mod tests {
     use std::process::Command;
 
     #[test]
-    fn kernel() {
+    fn version() {
         let kernel_version = get_kernel_version();
 
         let uname_output = Command::new("uname")
